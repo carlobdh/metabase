@@ -29,6 +29,7 @@ export const RESET_PASSWORD_MANUAL =
   "metabase/admin/people/RESET_PASSWORD_MANUAL";
 export const SHOW_MODAL = "metabase/admin/people/SHOW_MODAL";
 export const UPDATE_USER = "metabase/admin/people/UPDATE_USER";
+export const DELETE_USER = "metabase/admin/people/DELETE_USER";
 export const LOAD_GROUPS = "metabase/admin/people/LOAD_GROUPS";
 export const LOAD_MEMBERSHIPS = "metabase/admin/people/LOAD_MEMBERSHIPS";
 export const LOAD_GROUP_DETAILS = "metabase/admin/people/LOAD_GROUP_DETAILS";
@@ -112,13 +113,11 @@ export const createUser = createThunkAction(
 export const deactivateUser = createThunkAction(
   DEACTIVATE_USER,
   user => async () => {
-    await UserApi.delete({
-      userId: user.id,
+    await UserApi.deactivate({
+      id: user.id,
     });
 
-    MetabaseAnalytics.trackEvent("People Admin", "User Removed");
-
-    // NOTE: DELETE doesn't return the object, so just fake it:
+    MetabaseAnalytics.trackEvent("People Admin", "User Deactivated");
     return { ...user, is_active: false };
   },
 );
@@ -171,6 +170,12 @@ export const updateUser = createThunkAction(UPDATE_USER, user => async () => {
   return newUser;
 });
 
+export const deleteUser = createThunkAction(DELETE_USER, user => async () => {
+  MetabaseAnalytics.trackEvent("People Admin", "Delete User");
+  await UserApi.delete({id: user.id});
+  return user;
+});
+
 const modal = handleActions(
   {
     [SHOW_MODAL]: { next: (state, { payload }) => payload },
@@ -206,6 +211,12 @@ const users = handleActions(
     [UPDATE_USER]: {
       next: (state, { payload: user }) =>
         assoc(state, user.id, momentifyTimestamps(user, TIMESTAMP_KEYS)),
+    },
+    [DELETE_USER]: {
+      next: (state, { payload: user }) => {
+        delete state[user.id];
+        return {... state};
+      },
     },
   },
   null,

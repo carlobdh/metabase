@@ -173,12 +173,22 @@
       (email/send-new-user-email! user @api/*current-user* join-url))))
 
 
-(api/defendpoint DELETE "/:id"
+(api/defendpoint PUT "/:id/deactivate"
   "Disable a `User`.  This does not remove the `User` from the DB, but instead disables their account."
   [id]
   (api/check-superuser)
   (api/check-500 (db/update! User id, :is_active false))
   {:success true})
 
+(api/defendpoint DELETE "/:id"
+  "Deletes a `User`"
+  [id]
+  (api/check-superuser)
+  (api/let-404 [user (fetch-user :id id)]
+               (api/check  ( not (:is_active user))
+                           [400 {:message "Not able to delete an active user, it should be deactivated first"}])
+               )
+  (db/delete! User :id id)
+  {:success true})
 
 (api/define-routes)

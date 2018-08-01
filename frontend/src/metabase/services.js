@@ -291,9 +291,10 @@ export const UserApi = {
   current: GET("/api/user/current"),
   // get:                         GET("/api/user/:userId"),
   update: PUT("/api/user/:id"),
+  deactivate: PUT("/api/user/:id/deactivate"),
   update_password: PUT("/api/user/:id/password"),
   update_qbnewb: PUT("/api/user/:id/qbnewb"),
-  delete: DELETE("/api/user/:userId"),
+  delete: DELETE("/api/user/:id"),
   reactivate: PUT("/api/user/:userId/reactivate"),
   send_invite: POST("/api/user/:id/send_invite"),
 };

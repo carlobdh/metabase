@@ -90,7 +90,8 @@
 (defn- pre-delete [{:keys [id]}]
   (binding [perm-membership/*allow-changing-all-users-group-members* true
             collection/*allow-deleting-personal-collections*         true]
-    (doseq [[model k] [['Activity                   :user_id]
+    (doseq [[model k] [
+                        ['Activity                   :user_id]
                        ['Card                       :creator_id]
                        ['Card                       :made_public_by_id]
                        ['Collection                 :personal_owner_id]
@@ -104,7 +105,9 @@
                        ['Session                    :user_id]
                        [PermissionsGroupMembership :user_id]
                        ['PermissionsRevision        :user_id]
-                       ['ViewLog                    :user_id]]]
+                       ['ViewLog                    :user_id]
+                       ]
+            ]
       (db/delete! model k id))))
 
 (def ^:private default-user-columns

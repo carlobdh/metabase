@@ -28,6 +28,7 @@ export const MODAL_EDIT_DETAILS = "MODAL_EDIT_DETAILS";
 export const MODAL_INVITE_RESENT = "MODAL_INVITE_RESENT";
 export const MODAL_DEACTVIATE_USER = "MODAL_DEACTVIATE_USER";
 export const MODAL_REACTIVATE_USER = "MODAL_REACTIVATE_USER";
+export const MODAL_DELETE_USER = "MODAL_DELETE_USER";
 export const MODAL_RESET_PASSWORD = "MODAL_RESET_PASSWORD";
 export const MODAL_RESET_PASSWORD_MANUAL = "MODAL_RESET_PASSWORD_MANUAL";
 export const MODAL_RESET_PASSWORD_EMAIL = "MODAL_RESET_PASSWORD_EMAIL";
@@ -44,6 +45,7 @@ import {
   resetPasswordViaEmail,
   showModal,
   updateUser,
+  deleteUser,
   resendInvite,
   loadGroups,
   loadMemberships,
@@ -69,6 +71,7 @@ const mapDispatchToProps = {
   resetPasswordViaEmail,
   showModal,
   updateUser,
+  deleteUser,
   resendInvite,
   loadGroups,
   loadMemberships,
@@ -97,6 +100,7 @@ export default class PeopleListingApp extends Component {
     resetPasswordViaEmail: PropTypes.func.isRequired,
     showModal: PropTypes.func.isRequired,
     updateUser: PropTypes.func.isRequired,
+    deleteUser: PropTypes.func.isRequired,
     resendInvite: PropTypes.func.isRequired,
     loadGroups: PropTypes.func.isRequired,
     loadMemberships: PropTypes.func.isRequired,
@@ -176,6 +180,12 @@ export default class PeopleListingApp extends Component {
   onDeactivateUserConfirm(user) {
     this.props.showModal(null);
     this.props.deactivateUser(user);
+  }
+  
+  onDeleteUserConfirm(user) {
+    this.props.showModal(null);
+    this.props.deleteUser(user);
+    // this.props.fetchUsers();
   }
 
   onReactivateUserConfirm(user) {
@@ -310,7 +320,27 @@ export default class PeopleListingApp extends Component {
       </Modal>
     );
   }
-
+  
+  renderDeleteUserModal(modalDetails) {
+    let { user } = modalDetails;
+    
+    return (
+      <Modal
+        small
+        title={t`Delete ${user.common_name}?`}
+        footer={[
+          <Button onClick={this.onCloseModal}>{t`Cancel`}</Button>,
+          <Button danger onClick={() => this.onDeleteUserConfirm(user)}>
+            {t`Delete`}
+          </Button>,
+        ]}
+        onClose={this.onCloseModal}
+      >
+        {t`${user.first_name} will be deleted permanently.`}
+      </Modal>
+    );
+  }
+  
   renderReactivateUserModal(modalDetails) {
     let { user } = modalDetails;
 
@@ -404,6 +434,8 @@ export default class PeopleListingApp extends Component {
         return this.renderInviteResentModal(modalDetails);
       case MODAL_DEACTVIATE_USER:
         return this.renderDeactivateUserModal(modalDetails);
+      case MODAL_DELETE_USER:
+        return this.renderDeleteUserModal(modalDetails);
       case MODAL_REACTIVATE_USER:
         return this.renderReactivateUserModal(modalDetails);
       case MODAL_RESET_PASSWORD:
@@ -525,6 +557,19 @@ export default class PeopleListingApp extends Component {
                                       type: MODAL_REACTIVATE_USER,
                                       details: { user },
                                     })
+                                  }
+                                />
+                              </Tooltip>
+                              <Tooltip tooltip={t`Delete this account`}>
+                                <Icon
+                                  name="trash"
+                                  className="text-error text-error-hover cursor-pointer ml2"
+                                  size={20}
+                                  onClick={() =>
+                                    this.props.showModal({
+                                       type: MODAL_DELETE_USER,
+                                       details: { user },
+                                     })
                                   }
                                 />
                               </Tooltip>
