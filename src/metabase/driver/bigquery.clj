@@ -163,7 +163,7 @@
 ;;; |                                       Running Queries & Parsing Results                                        |
 ;;; +----------------------------------------------------------------------------------------------------------------+
 
-(def ^:private ^:const ^Integer query-timeout-seconds 60)
+(def ^:private ^:const ^Integer query-timeout-seconds 300)
 
 (defn- ^QueryResponse execute-bigquery
   ([{{:keys [project-id]} :details, :as database} query-string]
