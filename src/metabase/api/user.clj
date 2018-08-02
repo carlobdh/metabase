@@ -181,12 +181,12 @@
   {:success true})
 
 (api/defendpoint DELETE "/:id"
-  "Deletes a `User`"
+  "Deletes a `User` and all linked data. It can be performed only on deactivated users."
   [id]
   (api/check-superuser)
   (api/let-404 [user (fetch-user :id id)]
                (api/check  ( not (:is_active user))
-                           [400 {:message "Not able to delete an active user, it should be deactivated first"}])
+                           [400 {:message (tru "Not able to delete an active user, it should be deactivated first")}])
                )
   (db/delete! User :id id)
   {:success true})

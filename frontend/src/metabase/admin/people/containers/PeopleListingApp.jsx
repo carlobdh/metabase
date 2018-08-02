@@ -185,7 +185,6 @@ export default class PeopleListingApp extends Component {
   onDeleteUserConfirm(user) {
     this.props.showModal(null);
     this.props.deleteUser(user);
-    // this.props.fetchUsers();
   }
 
   onReactivateUserConfirm(user) {

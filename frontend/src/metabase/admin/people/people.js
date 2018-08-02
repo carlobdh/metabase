@@ -215,7 +215,7 @@ const users = handleActions(
     [DELETE_USER]: {
       next: (state, { payload: user }) => {
         delete state[user.id];
-        return {... state};
+        return {...state};
       },
     },
   },
