@@ -72,11 +72,13 @@ export default class DashboardGrid extends Component {
     });
   }
 
-  onLayoutChange(layout) {
+  onLayoutChange(layout, isSimulation) {
     let changes = layout.filter(
-      newLayout =>
+      newLayout => isSimulation ||
         !_.isEqual(newLayout, this.getLayoutForDashCard(newLayout.dashcard)),
     );
+    
+    
     for (let change of changes) {
       this.props.setDashCardAttributes({
         id: change.dashcard.id,
@@ -89,7 +91,7 @@ export default class DashboardGrid extends Component {
       });
     }
 
-    if (changes && changes.length > 0) {
+    if ( !isSimulation && changes && changes.length > 0 ) {
       MetabaseAnalytics.trackEvent("Dashboard", "Layout Changed");
     }
   }

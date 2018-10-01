@@ -1,12 +1,17 @@
 import React, { Component } from "react";
 import ReactDOM from "react-dom";
-
 import GridItem from "./GridItem.jsx";
 
 import _ from "underscore";
 import colors from "metabase/lib/colors";
 
 export default class GridLayout extends Component {
+  
+  previousOverlapping = {};
+  temporaryGridLayout = [];
+  previousGridLayout = [];
+  draggedLayout = null;
+  
   constructor(props, context) {
     super(props, context);
 
@@ -31,7 +36,7 @@ export default class GridLayout extends Component {
 
   componentWillReceiveProps(newProps) {
     const { dragging, resizing } = this.state;
-    if (!dragging && !resizing && this.state.layout !== newProps.layout) {
+    if ( !dragging && !resizing && this.state.layout !== newProps.layout) {
       this.setState({ layout: newProps.layout });
     }
   }
@@ -49,6 +54,8 @@ export default class GridLayout extends Component {
 
   onDragStart(i, { position }) {
     // this.setState({ dragging: true })
+    this.previousGridLayout = [ ... this.props.layout ]
+    this.draggedLayout = this.props.layout.find(l => l.i === i);
   }
 
   layoutsOverlap(a, b) {
@@ -62,8 +69,115 @@ export default class GridLayout extends Component {
       ...this.computeDraggedLayout(i, position),
       i: "placeholder",
     };
+    
     this.setState({ dragging: true, placeholderLayout: placeholderLayout });
+    // let newLayout;
+    // newLayout = this.generateNewLayout(this.state.layout, placeholderLayout);
+    // this.props.onLayoutChange(newLayout, true);
     this.props.onDrag();
+  }
+  
+  generateNewLayout(layouts, placeholderLayout) {
+    //all elements sorted by y and without the dragged element
+    let sortedCards = _.sortBy(layouts, 'y');
+    let newLayout = [];
+    for (let layout of sortedCards) {
+      newLayout.push(layout.i === this.draggedLayout.i ? layout : this.makeSpace(layout,placeholderLayout, sortedCards))
+    }
+    return newLayout;
+  }
+  
+  makeSpace(layout, placeholderLayout) {
+        let newLayout = { ... layout};
+        let originalLayout = this.previousGridLayout.find( previousLayout => previousLayout.i === layout.i );
+        let changed = false;
+        if (this.layoutsOverlap(originalLayout, placeholderLayout)) {
+          // vertical resizing
+          // resize top
+          if (
+            placeholderLayout.y + placeholderLayout.h <= originalLayout.y + originalLayout.h
+          ) {
+            newLayout.y = placeholderLayout.y + placeholderLayout.h;
+            newLayout.h = originalLayout.h - (newLayout.y - originalLayout.y);
+            
+            if (originalLayout.y <  (placeholderLayout.y )) {
+              // let firstFreeY = originalLayout.y;
+              let firstFreeY = 0;
+              for (let l of this.previousGridLayout) {
+                if (l.i !== this.draggedLayout.i && l.i !== layout.i) {
+                  if ( l.y < originalLayout.y && (l.y + l.h > firstFreeY)) {
+                    firstFreeY = l.y + l.h;
+                  }
+                }
+              }
+              newLayout.y = firstFreeY;
+              newLayout.h = placeholderLayout.y - firstFreeY;
+            }
+            
+            changed = true;
+          }
+  
+          // resize bottom
+          if (
+            placeholderLayout.y > originalLayout.y &&
+            placeholderLayout.y + placeholderLayout.h >= originalLayout.y + originalLayout.h
+          ) {
+            // let firstFreeY = 0;
+            // for (let l of this.previousGridLayout) {
+            //   if (l.i !== this.draggedLayout.i && l.i !== layout.i) {
+            //     if ( l.y < originalLayout.y && (l.y + l.h > firstFreeY)) {
+            //       firstFreeY = l.y + l.h;
+            //     }
+            //   }
+            // }
+            // newLayout.y = firstFreeY.y;
+            newLayout.y = originalLayout.y;
+            newLayout.h = placeholderLayout.y - originalLayout.y;
+            changed = true;
+          }
+          //
+          // invert + resize
+          // if (placeholderLayout.y <= originalLayout.y && (placeholderLayout.y + placeholderLayout.h) > (originalLayout.y + originalLayout.h) ) {
+          //   let placeholderDraggedUp =  placeholderLayout.y < this.draggedLayout.y;
+          //   let firstFreeY = placeholderDraggedUp ? this.draggedLayout.y + this.draggedLayout.h : this.draggedLayout.y;
+          //   for (let l of this.previousGridLayout) {
+          //     if (l.i !== this.draggedLayout.i && l.i !== layout.i) {
+          //       if (l.y < originalLayout.y && (l.y + l.h > firstFreeY)) {
+          //         firstFreeY = l.y + l.h;
+          //       }
+          //     }
+          //   }
+          //   newLayout.y = firstFreeY;
+          //   newLayout.h = originalLayout.h;
+          //   changed = true;
+          // }
+          //
+          //resize x
+          
+          // if ( placeholderLayout.y >= originalLayout.y &&
+          //       placeholderLayout.y < (originalLayout.y + originalLayout.h) &&
+          //       placeholderLayout.x >= originalLayout.x &&
+          //       placeholderLayout.x <= originalLayout.x + (originalLayout.w/4)
+          // ) {
+          //   newLayout.x = placeholderLayout.x + placeholderLayout.w;
+          //   const wDiff =  newLayout.x - originalLayout.x;
+          //   newLayout.w = originalLayout.w - wDiff;
+          //   changed = true;
+          // }
+          //
+          // if ( placeholderLayout.y >= originalLayout.y &&
+          //   placeholderLayout.y < (originalLayout.y + originalLayout.h) &&
+          //   placeholderLayout.x >= originalLayout.x &&
+          //   (placeholderLayout.x + placeholderLayout.w ) >= (originalLayout.x + originalLayout.w*3/4)
+          // ) {
+          //   newLayout.w = placeholderLayout.x - originalLayout.x ;
+          //   changed = true;
+          // }
+          
+        } else {
+          return originalLayout;
+        }
+      return changed ? newLayout : originalLayout;
   }
 
   onDragStop(i, { position }) {
@@ -71,12 +185,12 @@ export default class GridLayout extends Component {
     let newLayout;
     if (placeholderLayout) {
       let { x, y, w, h } = placeholderLayout;
-      newLayout = this.state.layout.map(
+      newLayout = this.generateNewLayout(this.state.layout, placeholderLayout).map(
         l => (l.i === i ? { ...l, x, y, w, h } : l),
       );
     }
     this.setState({ dragging: false, placeholderLayout: null });
-    if (newLayout) {
+    if( newLayout ) {
       this.props.onLayoutChange(newLayout);
     }
     this.props.onDragStop();
@@ -98,16 +212,7 @@ export default class GridLayout extends Component {
       x: Math.min(maxX, Math.max(0, Math.round(pos.left / cellSize.width))),
       y: Math.min(maxY, Math.max(0, Math.round(pos.top / cellSize.height))),
     };
-    let proposedLayout = targetLayout;
-    for (let otherLayout of this.state.layout) {
-      if (
-        originalLayout !== otherLayout &&
-        this.layoutsOverlap(proposedLayout, otherLayout)
-      ) {
-        return this.state.placeholderLayout || originalLayout;
-      }
-    }
-    return proposedLayout;
+    return targetLayout;
   }
 
   onResizeStart(i, { size }) {
