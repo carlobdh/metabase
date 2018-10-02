@@ -62,7 +62,7 @@
       (assoc :created_at (boolean created_at)
              :updated_at (boolean updated_at)
              :card       (-> (into {} card)
-                             (dissoc :id :database_id :table_id :created_at :updated_at)
+                             (dissoc :id :database_id :table_id :created_at :updated_at :query_average_duration)
                              (update :collection_id boolean)))))
 
 (defn- dashboard-response [{:keys [creator ordered_cards created_at updated_at] :as dashboard}]
@@ -76,7 +76,7 @@
       ordered_cards (update :ordered_cards #(mapv dashcard-response %)))))
 
 (defn- do-with-dashboards-in-a-collection [grant-collection-perms-fn! dashboards-or-ids f]
-  (tu/with-all-users-no-root-collection-perms
+  (tu/with-non-admin-groups-no-root-collection-perms
     (tt/with-temp Collection [collection]
       (grant-collection-perms-fn! (group/all-users) collection)
       (doseq [dashboard-or-id dashboards-or-ids]
@@ -139,7 +139,7 @@
           :updated_at    true
           :created_at    true
           :collection_id true})
-  (tu/with-all-users-no-root-collection-perms
+  (tu/with-non-admin-groups-no-root-collection-perms
     (tu/with-model-cleanup [Dashboard]
       (tt/with-temp Collection [collection]
         (perms/grant-collection-readwrite-permissions! (group/all-users) collection)
@@ -151,7 +151,7 @@
 ;; Make sure we can create a Dashboard with a Collection position
 (expect
   #metabase.models.dashboard.DashboardInstance{:collection_id true, :collection_position 1000}
-  (tu/with-all-users-no-root-collection-perms
+  (tu/with-non-admin-groups-no-root-collection-perms
     (tu/with-model-cleanup [Dashboard]
       (let [dashboard-name (tu/random-name)]
         (tt/with-temp Collection [collection]
@@ -165,7 +165,7 @@
 ;; ...but not if we don't have permissions for the Collection
 (expect
   nil
-  (tu/with-all-users-no-root-collection-perms
+  (tu/with-non-admin-groups-no-root-collection-perms
     (tu/with-model-cleanup [Dashboard]
       (let [dashboard-name (tu/random-name)]
         (tt/with-temp Collection [collection]
@@ -203,7 +203,6 @@
                                                            :dataset_query          {}
                                                            :read_permissions       nil
                                                            :visualization_settings {}
-                                                           :query_average_duration nil
                                                            :result_metadata        nil})
                            :series                 []}]})
   ;; fetch a dashboard WITH a dashboard card on it
@@ -217,7 +216,7 @@
 ;; ## GET /api/dashboard/:id with a series, should fail if the user doesn't have access to the collection
 (expect
   "You don't have permissions to do that."
-  (tu/with-all-users-no-root-collection-perms
+  (tu/with-non-admin-groups-no-root-collection-perms
     (tt/with-temp* [Collection          [{coll-id :id}      {:name "Collection 1"}]
                     Dashboard           [{dashboard-id :id} {:name       "Test Dashboard"
                                                              :creator_id (user->id :crowberto)}]
@@ -304,7 +303,7 @@
 ;; ...but if we don't have the Permissions for the old collection, we should get an Exception
 (expect
   "You don't have permissions to do that."
-  (tu/with-all-users-no-root-collection-perms
+  (tu/with-non-admin-groups-no-root-collection-perms
     (dashboard-test/with-dash-in-collection [db collection dash]
       (tt/with-temp Collection [new-collection]
         ;; grant Permissions for only the *new* collection
@@ -315,7 +314,7 @@
 ;; ...and if we don't have the Permissions for the new collection, we should get an Exception
 (expect
   "You don't have permissions to do that."
-  (tu/with-all-users-no-root-collection-perms
+  (tu/with-non-admin-groups-no-root-collection-perms
     (dashboard-test/with-dash-in-collection [db collection dash]
       (tt/with-temp Collection [new-collection]
         ;; grant Permissions for only the *old* collection
@@ -326,7 +325,7 @@
 ;; Can we change the Collection position of a Dashboard?
 (expect
   1
-  (tu/with-all-users-no-root-collection-perms
+  (tu/with-non-admin-groups-no-root-collection-perms
     (tt/with-temp* [Collection [collection]
                     Dashboard  [dashboard {:collection_id (u/get-id collection)}]]
       (perms/grant-collection-readwrite-permissions! (group/all-users) collection)
@@ -337,7 +336,7 @@
 ;; ...and unset (unpin) it as well?
 (expect
   nil
-  (tu/with-all-users-no-root-collection-perms
+  (tu/with-non-admin-groups-no-root-collection-perms
     (tt/with-temp* [Collection [collection]
                     Dashboard  [dashboard {:collection_id (u/get-id collection), :collection_position 1}]]
       (perms/grant-collection-readwrite-permissions! (group/all-users) collection)
@@ -348,7 +347,7 @@
 ;; ...we shouldn't be able to if we don't have permissions for the Collection
 (expect
   nil
-  (tu/with-all-users-no-root-collection-perms
+  (tu/with-non-admin-groups-no-root-collection-perms
     (tt/with-temp* [Collection [collection]
                     Dashboard  [dashboard {:collection_id (u/get-id collection)}]]
       ((user->client :rasta) :put 403 (str "dashboard/" (u/get-id dashboard))
@@ -357,7 +356,7 @@
 
 (expect
   1
-  (tu/with-all-users-no-root-collection-perms
+  (tu/with-non-admin-groups-no-root-collection-perms
     (tt/with-temp* [Collection [collection]
                     Dashboard  [dashboard {:collection_id (u/get-id collection), :collection_position 1}]]
       ((user->client :rasta) :put 403 (str "dashboard/" (u/get-id dashboard))
@@ -374,7 +373,7 @@
    "c" 2
    "d" 3
    "b" 4}
-  (tu/with-all-users-no-root-collection-perms
+  (tu/with-non-admin-groups-no-root-collection-perms
     (tt/with-temp Collection [collection]
       (card-api-test/with-ordered-items collection [Dashboard a
                                                     Dashboard b
@@ -391,7 +390,7 @@
    "a" 2
    "b" 3
    "d" 4}
-  (tu/with-all-users-no-root-collection-perms
+  (tu/with-non-admin-groups-no-root-collection-perms
     (tt/with-temp Collection [collection]
       (card-api-test/with-ordered-items collection [Card      a
                                                     Pulse     b
@@ -408,7 +407,7 @@
    "c" 2
    "a" 3
    "d" 4}
-  (tu/with-all-users-no-root-collection-perms
+  (tu/with-non-admin-groups-no-root-collection-perms
     (tt/with-temp Collection [collection]
       (card-api-test/with-ordered-items collection [Dashboard a
                                                     Card      b
@@ -425,7 +424,7 @@
    "c" 2
    "d" 3
    "a" 4}
-  (tu/with-all-users-no-root-collection-perms
+  (tu/with-non-admin-groups-no-root-collection-perms
     (tt/with-temp Collection [collection]
       (card-api-test/with-ordered-items collection [Dashboard a
                                                     Card      b
@@ -442,7 +441,7 @@
    "a" 2
    "b" 3
    "c" 4}
-  (tu/with-all-users-no-root-collection-perms
+  (tu/with-non-admin-groups-no-root-collection-perms
     (tt/with-temp Collection [collection]
       (card-api-test/with-ordered-items collection [Card      a
                                                     Pulse     b
@@ -463,7 +462,7 @@
     "f" 3
     "g" 4
     "h" 5}]
-  (tu/with-all-users-no-root-collection-perms
+  (tu/with-non-admin-groups-no-root-collection-perms
     (tt/with-temp* [Collection [collection-1]
                     Collection [collection-2]]
       (card-api-test/with-ordered-items collection-1 [Dashboard a
@@ -493,7 +492,7 @@
     "b" 2
     "c" 3
     "d" 4}]
-  (tu/with-all-users-no-root-collection-perms
+  (tu/with-non-admin-groups-no-root-collection-perms
     (tt/with-temp Collection [collection]
       (tu/with-model-cleanup [Dashboard]
         (card-api-test/with-ordered-items collection [Card  a
@@ -517,7 +516,7 @@
     "b" 2
     "c" nil
     "d" 3}]
-  (tu/with-all-users-no-root-collection-perms
+  (tu/with-non-admin-groups-no-root-collection-perms
     (tt/with-temp Collection [collection]
       (tu/with-model-cleanup [Dashboard]
         (card-api-test/with-ordered-items collection [Dashboard a

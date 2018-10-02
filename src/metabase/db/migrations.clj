@@ -23,15 +23,14 @@
              [field :refer [Field]]
              [humanization :as humanization]
              [permissions :as perms :refer [Permissions]]
-             [permissions-group :as perm-group]
+             [permissions-group :as perm-group :refer [PermissionsGroup]]
              [permissions-group-membership :as perm-membership :refer [PermissionsGroupMembership]]
              [pulse :refer [Pulse]]
-             [query-execution :as query-execution :refer [QueryExecution]]
              [setting :as setting :refer [Setting]]
              [user :refer [User]]]
-            [metabase.query-processor.util :as qputil]
-            [metabase.util.date :as du]
-            [puppetlabs.i18n.core :refer [trs]]
+            [metabase.util
+             [date :as du]
+             [i18n :refer [trs]]]
             [toucan
              [db :as db]
              [models :as models]])
@@ -204,40 +203,6 @@
 ;;; |                                           Migrating QueryExecutions                                            |
 ;;; +----------------------------------------------------------------------------------------------------------------+
 
-;; We're copying over data from the legacy `query_queryexecution` table to the new `query_execution` table; see #4522
-;; and #4531 for details
-
-;; model definition for the old table to facilitate the data copying process
-(models/defmodel ^:private ^:deprecated LegacyQueryExecution :query_queryexecution)
-
-(u/strict-extend (class LegacyQueryExecution)
-  models/IModel
-  (merge models/IModelDefaults
-         {:default-fields (constantly [:executor_id :result_rows :started_at :json_query :error :running_time])
-          :types          (constantly {:json_query :json, :error :clob})}))
-
-(defn- LegacyQueryExecution->QueryExecution
-  "Convert a LegacyQueryExecution to a format suitable for insertion as a new-format QueryExecution."
-  [{query :json_query, :as query-execution}]
-  (-> (assoc query-execution
-        :hash   (qputil/query-hash query)
-        :native (not (qputil/mbql-query? query)))
-      ;; since error is nullable now remove the old blank error message strings
-      (update :error (fn [error-message]
-                       (when-not (str/blank? error-message)
-                         error-message)))
-      (dissoc :json_query)))
-
-;; Migrate entries from the old query execution table to the new one. This might take a few minutes
-(defmigration ^{:author "camsaul", :added "0.23.0"} migrate-query-executions
-  ;; migrate the most recent 100,000 entries. Make sure the DB doesn't get snippy by trying to insert too many records
-  ;; at once. Divide the INSERT statements into chunks of 1,000
-  (binding [query-execution/*validate-context* false]
-    (doseq [chunk (partition-all 1000 (db/select LegacyQueryExecution {:limit 100000, :order-by [[:id :desc]]}))]
-      (db/insert-many! QueryExecution
-        (for [query-execution chunk]
-          (LegacyQueryExecution->QueryExecution query-execution))))))
-
 ;; drop the legacy QueryExecution table now that we don't need it anymore
 (defmigration ^{:author "camsaul", :added "0.23.0"} drop-old-query-execution-table
   ;; DROP TABLE IF EXISTS should work on Postgres, MySQL, and H2
@@ -315,7 +280,7 @@
     ;; For each Card belonging to that BigQuery database...
     (doseq [{query :dataset_query, card-id :id} (db/select [Card :id :dataset_query] :database_id database-id)]
       ;; If the Card isn't native, ignore it
-      (when (= (:type query) "native")
+      (when (= (keyword (:type query)) :native)
         (let [sql (get-in query [:native :query])]
           ;; if the Card already contains a #standardSQL or #legacySQL (both are case-insenstive) directive, ignore it
           (when-not (re-find #"(?i)#(standard|legacy)sql" sql)
@@ -344,7 +309,7 @@
 ;;
 ;; The user feedback we've received points to a UX that would do the following:
 ;;
-;; 1. Set permissions to the Root Collection to readwrite perms access for All User group.
+;; 1. Set permissions to the Root Collection to readwrite perms access for *all* Groups.
 ;;
 ;; 2. Create three new collections within the root collection: "Migrated dashboards," "Migrated pulses," and "Migrated
 ;;    questions."
@@ -356,20 +321,24 @@
 ;;    new collections.
 ;;
 (defmigration ^{:author "camsaul", :added "0.30.0"} add-migrated-collections
-  ;; 1. Grant Root Collection readwrite perms to All Users
-  (perms/grant-collection-readwrite-permissions! (perm-group/all-users) collection/root-collection)
-  ;; 2. Create the new collections.
-  (doseq [[model new-collection-name] {Dashboard (trs "Migrated Dashboards")
-                                       Pulse     (trs "Migrated Pulses")
-                                       Card      (trs "Migrated Questions")}
-          :when                       (db/exists? model :collection_id nil)
-          :let                        [new-collection (db/insert! Collection
-                                                        :name  new-collection-name
-                                                        :color "#509ee3")]] ; MB brand color
-    ;; 3. make sure the All Users group doesn't have any perms for this Collection.
-    (perms/revoke-collection-permissions! (perm-group/all-users) new-collection)
-    ;; 4. move everything not in this Collection to a new Collection
-    (log/info (trs "Moving instances of {0} that aren't in a Collection to {1} Collection {2}"
-                   (name model) new-collection-name (u/get-id new-collection)))
-    (db/update-where! model {:collection_id nil}
-      :collection_id (u/get-id new-collection))))
+  (let [non-admin-group-ids (db/select-ids PermissionsGroup :id [:not= (u/get-id (perm-group/admin))])]
+    ;; 1. Grant Root Collection readwrite perms to all Groups. Except for admin since they already have root (`/`)
+    ;; perms, and we don't want to put extra entries in there that confuse things
+    (doseq [group-id non-admin-group-ids]
+      (perms/grant-collection-readwrite-permissions! group-id collection/root-collection))
+    ;; 2. Create the new collections.
+    (doseq [[model new-collection-name] {Dashboard (str (trs "Migrated Dashboards"))
+                                         Pulse     (str (trs "Migrated Pulses"))
+                                         Card      (str (trs "Migrated Questions"))}
+            :when                       (db/exists? model :collection_id nil)
+            :let                        [new-collection (db/insert! Collection
+                                                          :name  new-collection-name
+                                                          :color "#509ee3")]] ; MB brand color
+      ;; 3. make sure the non-admin groups don't have any perms for this Collection.
+      (doseq [group-id non-admin-group-ids]
+        (perms/revoke-collection-permissions! group-id new-collection))
+      ;; 4. move everything not in this Collection to a new Collection
+      (log/info (trs "Moving instances of {0} that aren't in a Collection to {1} Collection {2}"
+                     (name model) new-collection-name (u/get-id new-collection)))
+      (db/update-where! model {:collection_id nil}
+        :collection_id (u/get-id new-collection)))))

@@ -46,7 +46,7 @@
 
 (expect
   (tt/with-temp* [Segment [{segment-id :id} {:table_id (data/id :venues)
-                                             :definition {:filter [:> [:field-id-id (data/id :venues :price)] 10]}}]]
+                                             :definition {:filter [:> [:field-id (data/id :venues :price)] 10]}}]]
     (api-call "segment/%s" [segment-id])))
 
 (expect
@@ -62,24 +62,24 @@
   (perms/revoke-collection-permissions! (perms-group/all-users) collection-id))
 
 (expect
-  (tu/with-all-users-no-root-collection-perms
+  (tu/with-non-admin-groups-no-root-collection-perms
     (tt/with-temp* [Collection [{collection-id :id}]
                     Card [{card-id :id} {:table_id      (data/id :venues)
                                          :collection_id collection-id
                                          :dataset_query {:query    {:filter       [:> [:field-id (data/id :venues :price)] 10]
-                                                                    :source_table (data/id :venues)}
+                                                                    :source-table (data/id :venues)}
                                                          :type     :query
                                                          :database (data/id)}}]]
       (perms/grant-collection-readwrite-permissions! (perms-group/all-users) collection-id)
       (api-call "question/%s" [card-id] #(revoke-collection-permissions! collection-id)))))
 
 (expect
-  (tu/with-all-users-no-root-collection-perms
+  (tu/with-non-admin-groups-no-root-collection-perms
     (tt/with-temp* [Collection [{collection-id :id}]
                     Card [{card-id :id} {:table_id      (data/id :venues)
                                          :collection_id collection-id
                                          :dataset_query {:query    {:filter       [:> [:field-id (data/id :venues :price)] 10]
-                                                                    :source_table (data/id :venues)}
+                                                                    :source-table (data/id :venues)}
                                                          :type     :query
                                                          :database (data/id)}}]]
       (perms/grant-collection-readwrite-permissions! (perms-group/all-users) collection-id)
@@ -88,12 +88,12 @@
                 #(revoke-collection-permissions! collection-id)))))
 
 (expect
-  (tu/with-all-users-no-root-collection-perms
+  (tu/with-non-admin-groups-no-root-collection-perms
     (tt/with-temp* [Collection [{collection-id :id}]
                     Card [{card-id :id} {:table_id      (data/id :venues)
                                          :collection_id collection-id
                                          :dataset_query {:query    {:filter       [:> [:field-id (data/id :venues :price)] 10]
-                                                                    :source_table (data/id :venues)}
+                                                                    :source-table (data/id :venues)}
                                                          :type     :query
                                                          :database (data/id)}}]]
       (perms/grant-collection-readwrite-permissions! (perms-group/all-users) collection-id)
@@ -104,14 +104,14 @@
 
 
 (expect (api-call "adhoc/%s" [(->> {:query {:filter [:> [:field-id (data/id :venues :price)] 10]
-                                            :source_table (data/id :venues)}
+                                            :source-table (data/id :venues)}
                                     :type :query
                                     :database (data/id)}
                                    (#'magic/encode-base64-json))]))
 
 (expect (api-call "adhoc/%s/cell/%s"
                   [(->> {:query {:filter [:> [:field-id (data/id :venues :price)] 10]
-                                 :source_table (data/id :venues)}
+                                 :source-table (data/id :venues)}
                          :type :query
                          :database (data/id)}
                         (#'magic/encode-base64-json))
@@ -120,7 +120,7 @@
 
 (expect (api-call "adhoc/%s/cell/%s/rule/example/indepth"
                   [(->> {:query {:filter [:> [:field-id (data/id :venues :price)] 10]
-                                 :source_table (data/id :venues)}
+                                 :source-table (data/id :venues)}
                          :type :query
                          :database (data/id)}
                         (#'magic/encode-base64-json))
@@ -131,7 +131,7 @@
 ;;; ------------------- Comparisons -------------------
 
 (def ^:private segment {:table_id (data/id :venues)
-                        :definition {:filter [:> [:field-id-id (data/id :venues :price)] 10]}})
+                        :definition {:filter [:> [:field-id (data/id :venues :price)] 10]}})
 
 (expect
   (tt/with-temp* [Segment [{segment-id :id} segment]]
@@ -147,7 +147,7 @@
   (tt/with-temp* [Segment [{segment-id :id} segment]]
     (api-call "adhoc/%s/cell/%s/compare/segment/%s"
               [(->> {:query {:filter [:> [:field-id (data/id :venues :price)] 10]
-                             :source_table (data/id :venues)}
+                             :source-table (data/id :venues)}
                      :type :query
                      :database (data/id)}
                     (#'magic/encode-base64-json))
